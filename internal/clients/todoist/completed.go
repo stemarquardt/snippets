@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func (c *Client) GetCompletedTasks(opts TodoistAPIOpts) ([]CompletedTask, error) {
+func (c *Client) GetComplTasks(opts TodoistAPIOpts) ([]Task, error) {
 	endpoint := "/tasks/completed/by_completion_date"
 
 	resp, err := c.doGetRequest(endpoint, opts)
@@ -21,7 +21,7 @@ func (c *Client) GetCompletedTasks(opts TodoistAPIOpts) ([]CompletedTask, error)
 	}
 
 	var completedResp struct {
-		Items []CompletedTask `json:"items"`
+		Items []Task `json:"items"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&completedResp); err != nil {
@@ -31,30 +31,22 @@ func (c *Client) GetCompletedTasks(opts TodoistAPIOpts) ([]CompletedTask, error)
 	return completedResp.Items, nil
 }
 
-func (c *Client) GetCompletedTasksInTimeWindow(since, until time.Time) ([]CompletedTask, error) {
-	return c.GetCompletedTasks(TodoistAPIOpts{
+func (c *Client) GetComplTasksInTimeWindow(since, until time.Time) ([]Task, error) {
+	return c.GetComplTasks(TodoistAPIOpts{
 		Since: since,
 		Until: until,
 	})
 }
 
-func (c *Client) GetCompletedTasksByProject(projectID string, since, until time.Time) ([]CompletedTask, error) {
-	return c.GetCompletedTasks(TodoistAPIOpts{
-		ProjectID: projectID,
-		Since:     since,
-		Until:     until,
-	})
-}
-
-func (c *Client) GetCompletedTasksToday() ([]CompletedTask, error) {
+func (c *Client) GetComplTasksToday() ([]Task, error) {
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
 
-	return c.GetCompletedTasksInTimeWindow(startOfDay, endOfDay)
+	return c.GetComplTasksInTimeWindow(startOfDay, endOfDay)
 }
 
-func (c *Client) GetCompletedTasksThisWeek() ([]CompletedTask, error) {
+func (c *Client) GetCompTasksThisWeek() ([]Task, error) {
 	now := time.Now()
 	weekday := int(now.Weekday())
 	if weekday == 0 {
@@ -64,44 +56,44 @@ func (c *Client) GetCompletedTasksThisWeek() ([]CompletedTask, error) {
 	startOfWeek = time.Date(startOfWeek.Year(), startOfWeek.Month(), startOfWeek.Day(), 0, 0, 0, 0, startOfWeek.Location())
 	endOfWeek := startOfWeek.Add(7 * 24 * time.Hour)
 
-	return c.GetCompletedTasksInTimeWindow(startOfWeek, endOfWeek)
+	return c.GetComplTasksInTimeWindow(startOfWeek, endOfWeek)
 }
 
-// GetCompletedTasksForBusinessWeek returns completed tasks for a specific business week
-func (c *Client) GetCompletedTasksForBusinessWeek(week BusinessWeek) ([]CompletedTask, error) {
-	return c.GetCompletedTasksInTimeWindow(week.Start, week.End)
+// GetTasksForBusinessWeek returns completed tasks for a specific business week
+func (c *Client) GetComplTasksForBusinessWeek(week BusinessWeek) ([]Task, error) {
+	return c.GetComplTasksInTimeWindow(week.Start, week.End)
 }
 
-// GetCompletedTasksForCurrentBusinessWeek returns completed tasks for the current business week (Monday to today)
-func (c *Client) GetCompletedTasksForCurrentBusinessWeek() ([]CompletedTask, error) {
+// GetTasksForCurrentBusinessWeek returns completed tasks for the current business week (Monday to today)
+func (c *Client) GetComplTasksForCurrentBusinessWeek() ([]Task, error) {
 	week := GetCurrentBusinessWeekToDate()
-	return c.GetCompletedTasksForBusinessWeek(week)
+	return c.GetComplTasksForBusinessWeek(week)
 }
 
-func (c *Client) GetCompletedTasksForCurrentBusinessWeekByProject(p Project) ([]CompletedTask, error) {
+func (c *Client) GetComplTasksForCurrentBusinessWeekByProject(p Project) ([]Task, error) {
 	week := GetCurrentBusinessWeekToDate()
-	return c.GetCompletedTasks(TodoistAPIOpts{
+	return c.GetComplTasks(TodoistAPIOpts{
 		Since:     week.Start,
 		Until:     week.End,
 		ProjectID: p.ID,
 	})
 }
 
-// GetCompletedTasksForCurrentFullBusinessWeek returns completed tasks for the entire current business week (Monday to Sunday)
-func (c *Client) GetCompletedTasksForCurrentFullBusinessWeek() ([]CompletedTask, error) {
+// GetTasksForCurrentFullBusinessWeek returns completed tasks for the entire current business week (Monday to Sunday)
+func (c *Client) GetComplTasksForCurrentFullBusinessWeek() ([]Task, error) {
 	week := GetCurrentBusinessWeek()
-	return c.GetCompletedTasksForBusinessWeek(week)
+	return c.GetComplTasksForBusinessWeek(week)
 }
 
-// GetCompletedTasksForPreviousBusinessWeeks returns completed tasks for N previous business weeks
+// GetTasksForPreviousBusinessWeeks returns completed tasks for N previous business weeks
 // Returns a slice of slices, where each inner slice contains tasks for one week
 // Weeks are in chronological order (oldest first)
-func (c *Client) GetCompletedTasksForPreviousBusinessWeeks(n int) ([][]CompletedTask, error) {
+func (c *Client) GetComplTasksForPreviousBusinessWeeks(n int) ([][]Task, error) {
 	weeks := GetBusinessWeeksBack(n)
-	result := make([][]CompletedTask, len(weeks))
+	result := make([][]Task, len(weeks))
 
 	for i, week := range weeks {
-		tasks, err := c.GetCompletedTasksForBusinessWeek(week)
+		tasks, err := c.GetComplTasksForBusinessWeek(week)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get tasks for week %s: %w", week.String(), err)
 		}

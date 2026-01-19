@@ -1,6 +1,7 @@
 package todoist
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,7 +19,7 @@ type Client struct {
 	httpClient *http.Client
 	token      string
 	baseURL    string
-	projects   []Project
+	projects   map[string]Project
 }
 
 type APIError struct {
@@ -31,8 +32,9 @@ func NewClient(token string) *Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		token:   token,
-		baseURL: BaseURL,
+		token:    token,
+		baseURL:  BaseURL,
+		projects: map[string]Project{},
 	}
 }
 
@@ -40,12 +42,22 @@ func (e APIError) Error() string {
 	return fmt.Sprintf("Todoist API error (status %d): %s", e.StatusCode, e.Message)
 }
 
-func (c *Client) SetProjects(projs []Project) {
-	c.projects = projs
-}
+func (c *Client) GetProductivityStats(opts TodoistAPIOpts) (ProductivityStats, error) {
+	// Not sure what to do with this info, but could be fun!
+	resp, err := c.doGetRequest("/tasks/completed/stats", TodoistAPIOpts{})
+	if err != nil {
+		return ProductivityStats{}, fmt.Errorf("problem getting productivity stats: %s", err)
+	}
+	defer resp.Body.Close()
 
-func (c *Client) AddProject(p Project) {
-	c.projects = append(c.projects, p)
+	if resp.StatusCode != http.StatusOK {
+		return ProductivityStats{}, fmt.Errorf("API request failed with status %d", resp.StatusCode)
+	}
+	var stats ProductivityStats
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		return ProductivityStats{}, fmt.Errorf("failed to decode completed tasks response: %w", err)
+	}
+	return stats, nil
 }
 
 func (c *Client) doGetRequest(endpoint string, opts TodoistAPIOpts) (*http.Response, error) {
@@ -92,6 +104,38 @@ func (c *Client) doGetRequest(endpoint string, opts TodoistAPIOpts) (*http.Respo
 	return resp, nil
 }
 
+// func (c *Client) doRequest(method, endpoint string, opts TodoistAPIOpts) (*http.Response, error) {
+// 	if method == "GET" {
+// 		return c.doGetRequest(endpoint, opts)
+// 	}
+
+// 	req, err := http.NewRequest(method, c.baseURL+endpoint, reqBody)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to create request: %w", err)
+// 	}
+
+// 	req.Header.Set("Authorization", "Bearer "+c.token)
+// 	if body != nil {
+// 		req.Header.Set("Content-Type", "application/json")
+// 	}
+
+// 	resp, err := c.httpClient.Do(req)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to execute request: %w", err)
+// 	}
+
+// 	if resp.StatusCode >= 400 {
+// 		defer resp.Body.Close()
+// 		bodyBytes, _ := io.ReadAll(resp.Body)
+// 		return nil, APIError{
+// 			StatusCode: resp.StatusCode,
+// 			Message:    string(bodyBytes),
+// 		}
+// 	}
+
+// 	return resp, nil
+// }
+
 func (c *Client) doFormRequest(endpoint string, formData url.Values) (*http.Response, error) {
 	req, err := http.NewRequest(http.MethodGet, c.baseURL+endpoint, strings.NewReader(formData.Encode()))
 	if err != nil {
@@ -120,6 +164,6 @@ func (c *Client) doFormRequest(endpoint string, formData url.Values) (*http.Resp
 }
 
 func (c *Client) ValidateToken() error {
-	_, err := c.GetProjects()
+	_, err := c.GetProductivityStats(TodoistAPIOpts{})
 	return err
 }
