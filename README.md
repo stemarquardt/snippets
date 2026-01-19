@@ -10,10 +10,10 @@ This is starting out using Todoist (because that's what I use) but I'm sure you 
 
 Next things up:
 
-[] Extract more info from tasks, especially sub tasks
-[] Gen AI summary
-[] Store rollups in SQLite db
-[] Clean up the CLI tooling
+- [ ] Extract more info from tasks, especially sub tasks
+- [ ] Gen AI summary
+- [ ] Store rollups in SQLite db
+- [ ] Clean up the CLI tooling
 
 ## Project Structure
 
