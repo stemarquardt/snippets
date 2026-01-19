@@ -16,10 +16,10 @@ const (
 )
 
 type Client struct {
+	Projects   map[string]*Project
 	httpClient *http.Client
 	token      string
 	baseURL    string
-	projects   map[string]Project
 }
 
 type APIError struct {
@@ -27,15 +27,34 @@ type APIError struct {
 	Message    string
 }
 
-func NewClient(token string) *Client {
-	return &Client{
+func NewClient(token string, projIds []string) (*Client, error) {
+	c := &Client{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 		token:    token,
 		baseURL:  BaseURL,
-		projects: map[string]Project{},
+		Projects: map[string]*Project{},
 	}
+	// Get project info for requested IDs to filter tasks. Blank is all Projects.
+	if len(projIds) == 0 {
+		projs, err := c.getAllProjectsFromAPI()
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range projs {
+			c.Projects[p.ID] = &p
+		}
+		return c, nil
+	}
+	for _, pId := range projIds {
+		p, err := c.getProjectFromAPI(pId)
+		if err != nil {
+			return nil, err
+		}
+		c.Projects[pId] = p
+	}
+	return c, nil
 }
 
 func (e APIError) Error() string {

@@ -7,37 +7,37 @@ import (
 
 func (c *Client) SetProjects(projs []Project) {
 	for _, p := range projs {
-		c.projects[p.ID] = p
+		c.Projects[p.ID] = &p
 	}
 }
 
-func (c *Client) DelProjects() {
-	c.projects = map[string]Project{}
+func (c *Client) DelAllProjects() {
+	c.Projects = map[string]*Project{}
 }
 
 func (c *Client) DelProject(p Project) {
-	c.projects[p.ID] = Project{}
+	c.Projects[p.ID] = &Project{}
 }
 
 func (c *Client) AddProject(p Project) {
 	// Overwrites existing project in map, they shouldn't change but beware.
-	c.projects[p.ID] = p
+	c.Projects[p.ID] = &p
 }
 
 func (c *Client) GetProject(projectId string) (*Project, error) {
-	p, ok := c.projects[projectId]
+	p, ok := c.Projects[projectId]
 	if ok {
-		return &p, nil
+		return p, nil
 	}
 	return c.getProjectFromAPI(projectId)
 }
 
 func (c *Client) GetProjects() ([]Project, error) {
-	if c.projects != nil {
-		// This means the project flags were set, so we're filtering for these projects only.
-		p := make([]Project, 0, len(c.projects))
-		for k := range c.projects {
-			p = append(p, c.projects[k])
+	if c.Projects != nil {
+		// This means the project flags were set, so we're filtering for these Projects only.
+		p := make([]Project, 0, len(c.Projects))
+		for k := range c.Projects {
+			p = append(p, *c.Projects[k])
 		}
 		return p, nil
 	}
