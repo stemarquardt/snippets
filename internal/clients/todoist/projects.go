@@ -1,6 +1,7 @@
 package todoist
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 )
@@ -24,15 +25,15 @@ func (c *Client) AddProject(p Project) {
 	c.Projects[p.ID] = &p
 }
 
-func (c *Client) GetProject(projectId string) (*Project, error) {
+func (c *Client) GetProject(ctx context.Context, projectId string) (*Project, error) {
 	p, ok := c.Projects[projectId]
 	if ok {
 		return p, nil
 	}
-	return c.getProjectFromAPI(projectId)
+	return c.getProjectFromAPI(ctx, projectId)
 }
 
-func (c *Client) GetProjects() ([]Project, error) {
+func (c *Client) GetProjects(ctx context.Context) ([]Project, error) {
 	if c.Projects != nil {
 		// This means the project flags were set, so we're filtering for these Projects only.
 		p := make([]Project, 0, len(c.Projects))
@@ -42,11 +43,11 @@ func (c *Client) GetProjects() ([]Project, error) {
 		return p, nil
 	}
 	// Desired projects not set, or requesting every project for this user.
-	return c.getAllProjectsFromAPI()
+	return c.getAllProjectsFromAPI(ctx)
 }
 
-func (c *Client) getAllProjectsFromAPI() ([]Project, error) {
-	resp, err := c.doGetRequest("/projects", TodoistAPIOpts{})
+func (c *Client) getAllProjectsFromAPI(ctx context.Context) ([]Project, error) {
+	resp, err := c.doGetRequest(ctx, "/projects", TodoistAPIOpts{})
 	if err != nil {
 		return nil, err
 	}
@@ -60,15 +61,12 @@ func (c *Client) getAllProjectsFromAPI() ([]Project, error) {
 	return d.Results, nil
 }
 
-func (c *Client) getProjectFromAPI(projectID string) (*Project, error) {
-	resp, err := c.doGetRequest(fmt.Sprintf("/projects/%s", projectID), TodoistAPIOpts{})
+func (c *Client) getProjectFromAPI(ctx context.Context, projectID string) (*Project, error) {
+	resp, err := c.doGetRequest(ctx, fmt.Sprintf("/projects/%s", projectID), TodoistAPIOpts{})
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == 404 {
-		return nil, fmt.Errorf("Project (%s) not found", projectID)
-	}
 
 	var p Project
 	if err = json.NewDecoder(resp.Body).Decode(&p); err != nil {

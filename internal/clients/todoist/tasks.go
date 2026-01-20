@@ -1,6 +1,7 @@
 package todoist
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 )
@@ -8,9 +9,9 @@ import (
 // NOTES:
 // `parent_id` denotes a subtask, it'll show up like `"parent_id": "6fpCwRh45C7pXgHm"`, probably useful for gathering context about tasks
 
-func (c *Client) GetTasksForProj(p string) ([]Task, error) {
+func (c *Client) GetTasksForProj(ctx context.Context, p string) ([]Task, error) {
 	endpoint := "/tasks"
-	resp, err := c.doGetRequest(endpoint, TodoistAPIOpts{ProjectID: p})
+	resp, err := c.doGetRequest(ctx, endpoint, TodoistAPIOpts{ProjectID: p})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to make all tasks tasks request: %w", err)
 	}
@@ -28,12 +29,8 @@ func (c *Client) GetTasksForProj(p string) ([]Task, error) {
 	return allTasksResp.Results, nil
 }
 
-func (c *Client) GetAllTasks() ([]Task, error) {
-	return c.GetTasksForProj("")
-}
-
-func (c *Client) GetTasksByProject(projectID string) ([]Task, error) {
-	return c.GetTasksForProj(projectID)
+func (c *Client) GetAllTasks(ctx context.Context) ([]Task, error) {
+	return c.GetTasksForProj(ctx, "")
 }
 
 func (c *Client) GetTaskNames(tasks []Task) []string {

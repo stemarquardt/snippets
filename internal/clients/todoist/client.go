@@ -1,13 +1,12 @@
 package todoist
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -27,7 +26,7 @@ type APIError struct {
 	Message    string
 }
 
-func NewClient(token string, projIds []string) (*Client, error) {
+func NewClient(ctx context.Context, token string, projIds []string) (*Client, error) {
 	c := &Client{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -38,7 +37,7 @@ func NewClient(token string, projIds []string) (*Client, error) {
 	}
 	// Get project info for requested IDs to filter tasks. Blank is all Projects.
 	if len(projIds) == 0 {
-		projs, err := c.getAllProjectsFromAPI()
+		projs, err := c.getAllProjectsFromAPI(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -48,7 +47,7 @@ func NewClient(token string, projIds []string) (*Client, error) {
 		return c, nil
 	}
 	for _, pId := range projIds {
-		p, err := c.getProjectFromAPI(pId)
+		p, err := c.getProjectFromAPI(ctx, pId)
 		if err != nil {
 			return nil, err
 		}
@@ -61,11 +60,11 @@ func (e APIError) Error() string {
 	return fmt.Sprintf("Todoist API error (status %d): %s", e.StatusCode, e.Message)
 }
 
-func (c *Client) GetProductivityStats(opts TodoistAPIOpts) (ProductivityStats, error) {
+func (c *Client) GetProductivityStats(ctx context.Context, opts TodoistAPIOpts) (ProductivityStats, error) {
 	// Not sure what to do with this info, but could be fun!
-	resp, err := c.doGetRequest("/tasks/completed/stats", TodoistAPIOpts{})
+	resp, err := c.doGetRequest(ctx, "/tasks/completed/stats", TodoistAPIOpts{})
 	if err != nil {
-		return ProductivityStats{}, fmt.Errorf("problem getting productivity stats: %s", err)
+		return ProductivityStats{}, fmt.Errorf("problem getting productivity stats: %s", err.Error())
 	}
 	defer resp.Body.Close()
 
@@ -79,8 +78,8 @@ func (c *Client) GetProductivityStats(opts TodoistAPIOpts) (ProductivityStats, e
 	return stats, nil
 }
 
-func (c *Client) doGetRequest(endpoint string, opts TodoistAPIOpts) (*http.Response, error) {
-	req, err := http.NewRequest("GET", c.baseURL+endpoint, nil)
+func (c *Client) doGetRequest(ctx context.Context, endpoint string, opts TodoistAPIOpts) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -155,34 +154,35 @@ func (c *Client) doGetRequest(endpoint string, opts TodoistAPIOpts) (*http.Respo
 // 	return resp, nil
 // }
 
-func (c *Client) doFormRequest(endpoint string, formData url.Values) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodGet, c.baseURL+endpoint, strings.NewReader(formData.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create request: %w", err)
-	}
+// func (c *Client) doFormRequest(endpoint string, formData url.Values) (*http.Response, error) {
+// 	req, err := http.NewRequest(http.MethodGet, c.baseURL+endpoint, strings.NewReader(formData.Encode()))
+// 	if err != nil {
+// 		return nil, fmt.Errorf("Failed to create request: %w", err)
+// 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Content-Type", "application/json")
+// 	req.Header.Set("Authorization", "Bearer "+c.token)
+// 	req.Header.Set("Content-Type", "application/json")
 
-	fmt.Printf("Req: %+v", req)
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to execute request: %w", err)
-	}
+// 	fmt.Printf("Req: %+v", req)
+// 	resp, err := c.httpClient.Do(req)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("Failed to execute request: %w", err)
+// 	}
 
-	if resp.StatusCode >= 400 {
-		defer resp.Body.Close()
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, APIError{
-			StatusCode: resp.StatusCode,
-			Message:    string(bodyBytes),
-		}
-	}
+// 	if resp.StatusCode >= 400 {
+// 		defer resp.Body.Close()
+// 		bodyBytes, _ := io.ReadAll(resp.Body)
+// 		return nil, APIError{
+// 			StatusCode: resp.StatusCode,
+// 			Message:    string(bodyBytes),
+// 		}
+// 	}
 
-	return resp, nil
-}
+// 	return resp, nil
+// }
 
-func (c *Client) ValidateToken() error {
-	_, err := c.GetProductivityStats(TodoistAPIOpts{})
+func (c *Client) ValidateToken(ctx context.Context) error {
+	// Use arbitrary, hopefully fast, endpoint to test out the token
+	_, err := c.GetProductivityStats(ctx, TodoistAPIOpts{})
 	return err
 }
