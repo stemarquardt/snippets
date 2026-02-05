@@ -8,6 +8,11 @@ type BusinessWeek struct {
 	End   time.Time
 }
 
+type BizWeekTasks struct {
+	WeekOf BusinessWeek
+	Tasks  []FullCtxTask
+}
+
 // GetCurrentBusinessWeek returns the current business week (Monday to today or Sunday, whichever is earlier)
 func GetCurrentBusinessWeek() BusinessWeek {
 	now := time.Now()
@@ -68,8 +73,7 @@ func GetBusinessWeeksBack(n int) []BusinessWeek {
 	currentDate := time.Now()
 
 	for i := n - 1; i >= 0; i-- {
-		weeksBack := i + 1
-		dateInWeek := currentDate.AddDate(0, 0, -7*weeksBack)
+		dateInWeek := currentDate.AddDate(0, 0, -7*i)
 		weeks[n-1-i] = GetBusinessWeekForDate(dateInWeek)
 	}
 

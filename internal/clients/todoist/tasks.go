@@ -6,19 +6,16 @@ import (
 	"fmt"
 )
 
-// NOTES:
-// `parent_id` denotes a subtask, it'll show up like `"parent_id": "6fpCwRh45C7pXgHm"`, probably useful for gathering context about tasks
+const (
+	endpoint string = "/tasks"
+)
 
-func (c *Client) GetTasksForProj(ctx context.Context, p string) ([]Task, error) {
-	endpoint := "/tasks"
-	resp, err := c.doGetRequest(ctx, endpoint, TodoistAPIOpts{ProjectID: p})
+func (c *Client) GetTasksForProj(ctx context.Context, pId string) ([]FullCtxTask, error) {
+	resp, err := c.doGetRequest(ctx, endpoint, TodoistAPIOpts{ProjectID: pId})
 	if err != nil {
-		return nil, fmt.Errorf("Failed to make all tasks tasks request: %w", err)
+		return nil, fmt.Errorf("failed to make all tasks tasks request: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Non-200 status code (%d), resp: %s", resp.StatusCode, resp.Body)
-	}
 	var allTasksResp struct {
 		Results []Task `json:"results"`
 	}
@@ -26,11 +23,24 @@ func (c *Client) GetTasksForProj(ctx context.Context, p string) ([]Task, error) 
 		return nil, fmt.Errorf("failed to decode completed tasks response: %w", err)
 	}
 
-	return allTasksResp.Results, nil
+	allTasks, err := c.ConvertToFullCtx(ctx, allTasksResp.Results)
+	if err != nil {
+		return nil, nil
+	}
+
+	return allTasks, nil
 }
 
-func (c *Client) GetAllTasks(ctx context.Context) ([]Task, error) {
-	return c.GetTasksForProj(ctx, "")
+func (c *Client) GetAllTasks(ctx context.Context) ([]FullCtxTask, error) {
+	var tasks []FullCtxTask
+	for _, p := range c.Projects {
+		t, err := c.GetTasksForProj(ctx, p.ID)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t...)
+	}
+	return tasks, nil
 }
 
 func (c *Client) GetTaskNames(tasks []Task) []string {
@@ -39,4 +49,35 @@ func (c *Client) GetTaskNames(tasks []Task) []string {
 		names = append(names, t.Content)
 	}
 	return names
+}
+
+// Gather the additional context for a slice of tasks.
+func (c *Client) ConvertToFullCtx(ctx context.Context, tasks []Task) ([]FullCtxTask, error) {
+	var allTasks []FullCtxTask
+	for _, t := range tasks {
+		fullT := FullCtxTask{Task: t}
+		if t.ParentID != "" {
+			parent, err := c.GetTask(ctx, t.ParentID)
+			if err != nil {
+				fmt.Println("non-fatal error getting parent task: ", err)
+				continue
+			}
+			fullT.ParentTask = parent
+		}
+		allTasks = append(allTasks, fullT)
+	}
+	return allTasks, nil
+}
+
+func (c *Client) GetTask(ctx context.Context, id string) (Task, error) {
+	resp, err := c.doGetRequest(ctx, fmt.Sprintf("%s/%s", endpoint, id), TodoistAPIOpts{TaskID: id})
+	if err != nil {
+		return Task{}, err
+	}
+	defer resp.Body.Close()
+	var task Task
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return Task{}, fmt.Errorf("failed to decode task response: %w", err)
+	}
+	return task, nil
 }

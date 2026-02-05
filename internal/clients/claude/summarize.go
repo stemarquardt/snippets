@@ -10,7 +10,7 @@ import (
 	todo "github.com/stemarquardt/snippets/internal/clients/todoist"
 )
 
-func (c *Client) SummarizeTasks(tasks []todo.Task, weekOf time.Time) (*TaskSummary, error) {
+func (c *Client) SummarizeTasks(tasks []todo.FullCtxTask, weekOf time.Time) (*TaskSummary, error) {
 	if len(tasks) == 0 {
 		return &TaskSummary{
 			WeekOf:         weekOf,
@@ -36,12 +36,17 @@ Focus on:
 
 	taskList := make([]string, len(tasks))
 	for i, task := range tasks {
-		complAt, err := time.Parse(time.RFC3339, task.CompletedAt)
+		complAt, err := time.Parse(time.RFC3339, task.Task.CompletedAt)
 		if err != nil {
 			return nil, err
 		}
 		completedDate := complAt.Format("Mon Jan 2")
-		taskList[i] = fmt.Sprintf("- %s (completed %s)", task.Content, completedDate)
+		taskList[i] = fmt.Sprintf("- Title: %s, Description: %s (completed %s)%s",
+			task.Task.Content, task.Task.Description, completedDate,
+			fmt.Sprintf(
+				"; Parent task (for more context): Title: %s, Description: %s",
+				task.ParentTask.Content,
+				task.ParentTask.Description))
 	}
 
 	userPrompt := fmt.Sprintf(`Analyze these %d completed tasks from the week of %s:

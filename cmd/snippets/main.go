@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stemarquardt/snippets/internal/clients/claude"
 	"github.com/stemarquardt/snippets/internal/clients/todoist"
+	"github.com/stemarquardt/snippets/internal/storage"
 	"golang.org/x/term"
 )
 
@@ -22,6 +23,7 @@ var (
 	bizWeeksFlag int
 	todoClient   *todoist.Client
 	claudeClient *claude.Client
+	db           *storage.Store
 )
 
 func main() {
@@ -40,8 +42,9 @@ var rootCmd = &cobra.Command{
 	Short: "A productivity analysis tool using Todoist and Claude AI",
 	Long: `Snippets is a CLI tool that analyzes your Todoist tasks using Claude AI
 to provide weekly summaries and productivity trend analysis.`,
-	SilenceUsage:      true,
-	PersistentPreRunE: initClients,
+	SilenceUsage:       true,
+	PersistentPreRunE:  initClients,
+	PersistentPostRunE: cleanup,
 }
 
 var allTodoTasksCmd = &cobra.Command{
@@ -103,43 +106,62 @@ func validateDatabase(dbPath string) error {
 	return nil
 }
 
-func promptForToken(prompt string) (string, error) {
+func promptForToken(ctx context.Context, prompt string) (string, error) {
 	fmt.Print(prompt)
-	byteToken, err := term.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		return "", fmt.Errorf("failed to read token: %w", err)
-	}
-	fmt.Println()
 
-	token := strings.TrimSpace(string(byteToken))
-	if token == "" {
-		return "", fmt.Errorf("token cannot be empty")
+	// Channel to receive the result from ReadPassword
+	type result struct {
+		token []byte
+		err   error
 	}
+	resultCh := make(chan result, 1)
 
-	return token, nil
+	go func() {
+		byteToken, err := term.ReadPassword(int(syscall.Stdin))
+		resultCh <- result{byteToken, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		fmt.Println()
+		return "", ctx.Err()
+	case r := <-resultCh:
+		if r.err != nil {
+			return "", fmt.Errorf("failed to read token: %w", r.err)
+		}
+		fmt.Println()
+
+		token := strings.TrimSpace(string(r.token))
+		if token == "" {
+			return "", fmt.Errorf("token cannot be empty")
+		}
+		return token, nil
+	}
 }
 
-func getAPIToken(envVar, tokenName string) (string, error) {
+func getAPIToken(ctx context.Context, envVar, tokenName string) (string, error) {
 	token := os.Getenv(envVar)
 	if token != "" {
 		return token, nil
 	}
 
 	fmt.Printf("\n%s API token not found in environment variable %s\n", tokenName, envVar)
-	return promptForToken(fmt.Sprintf("Enter %s API token (input will be hidden): ", tokenName))
+	return promptForToken(ctx, fmt.Sprintf("Enter %s API token (input will be hidden): ", tokenName))
 }
 
 func initClients(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+
 	if err := validateDatabase(dbPathFlag); err != nil {
 		return fmt.Errorf("database validation failed: %w", err)
 	}
 
-	todoistToken, err := getAPIToken("TODOIST_API_TOKEN", "Todoist")
+	todoistToken, err := getAPIToken(ctx, "TODOIST_API_TOKEN", "Todoist")
 	if err != nil {
 		return fmt.Errorf("failed to get Todoist API token: %w", err)
 	}
 
-	claudeAPIKey, err := getAPIToken("CLAUDE_API_KEY", "Claude")
+	claudeAPIKey, err := getAPIToken(ctx, "CLAUDE_API_KEY", "Claude")
 	if err != nil {
 		return fmt.Errorf("failed to get Claude API key: %w", err)
 	}
@@ -166,6 +188,20 @@ func initClients(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("✓")
 
-	fmt.Printf("\nDatabase path: %s\n", dbPathFlag)
+	fmt.Printf("Validating database with path: %s... ", dbPathFlag)
+	db, err = storage.New(dbPathFlag)
+	if err != nil {
+		fmt.Println("✗")
+		return fmt.Errorf("unable to create database conn: %w", err)
+	}
+	fmt.Println("✓")
+
+	return nil
+}
+
+func cleanup(cmd *cobra.Command, args []string) error {
+	if db != nil {
+		return db.Close()
+	}
 	return nil
 }

@@ -10,7 +10,7 @@ import (
 )
 
 func runAllTodoTasks(cmd *cobra.Command, args []string) error {
-	var tasks []todo.Task
+	var tasks []todo.FullCtxTask
 	var err error
 	for _, p := range todoClient.Projects {
 		tasks, err = todoClient.GetTasksForProj(cmd.Context(), p.ID)

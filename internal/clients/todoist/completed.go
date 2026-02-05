@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-func (c *Client) GetComplTasks(ctx context.Context, opts TodoistAPIOpts) ([]Task, error) {
+func (c *Client) GetComplTasks(ctx context.Context, opts TodoistAPIOpts) ([]FullCtxTask, error) {
 	endpoint := "/tasks/completed/by_completion_date"
 
 	resp, err := c.doGetRequest(ctx, endpoint, opts)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to make completed tasks request: %w", err)
+		return nil, fmt.Errorf("failed to make completed tasks request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -23,12 +23,16 @@ func (c *Client) GetComplTasks(ctx context.Context, opts TodoistAPIOpts) ([]Task
 	if err := json.NewDecoder(resp.Body).Decode(&completedResp); err != nil {
 		return nil, fmt.Errorf("failed to decode completed tasks response: %w", err)
 	}
+	tasks, err := c.ConvertToFullCtx(ctx, completedResp.Items)
+	if err != nil {
+		return nil, err
+	}
 
-	return completedResp.Items, nil
+	return tasks, nil
 }
 
-func (c *Client) GetComplTasksInTimeWindow(ctx context.Context, since, until time.Time) ([]Task, error) {
-	var tasks []Task
+func (c *Client) GetComplTasksInTimeWindow(ctx context.Context, since, until time.Time) ([]FullCtxTask, error) {
+	var tasks []FullCtxTask
 	for pId := range c.Projects {
 		t, err := c.GetComplTasks(ctx, TodoistAPIOpts{
 			Since:     since,
@@ -36,14 +40,14 @@ func (c *Client) GetComplTasksInTimeWindow(ctx context.Context, since, until tim
 			ProjectID: pId,
 		})
 		if err != nil {
-			return []Task{}, err
+			return nil, err
 		}
 		tasks = append(tasks, t...)
 	}
 	return tasks, nil
 }
 
-func (c *Client) GetComplTasksToday(ctx context.Context) ([]Task, error) {
+func (c *Client) GetComplTasksToday(ctx context.Context) ([]FullCtxTask, error) {
 	now := time.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
@@ -52,7 +56,7 @@ func (c *Client) GetComplTasksToday(ctx context.Context) ([]Task, error) {
 }
 
 // Gather tasks for a calendar week, not the business week.
-func (c *Client) GetCompTasksThisCalWeek(ctx context.Context) ([]Task, error) {
+func (c *Client) GetCompTasksThisCalWeek(ctx context.Context) ([]FullCtxTask, error) {
 	now := time.Now()
 	weekday := int(now.Weekday())
 	if weekday == 0 {
@@ -66,17 +70,17 @@ func (c *Client) GetCompTasksThisCalWeek(ctx context.Context) ([]Task, error) {
 }
 
 // GetTasksForBusinessWeek returns completed tasks for a specific business week
-func (c *Client) GetComplTasksForBizWeek(ctx context.Context, week BusinessWeek) ([]Task, error) {
+func (c *Client) GetComplTasksForBizWeek(ctx context.Context, week BusinessWeek) ([]FullCtxTask, error) {
 	return c.GetComplTasksInTimeWindow(ctx, week.Start, week.End)
 }
 
 // GetTasksForCurrentBusinessWeek returns completed tasks for the current business week (Monday to today)
-func (c *Client) GetComplTasksForCurrentBizWeek(ctx context.Context) ([]Task, error) {
+func (c *Client) GetComplTasksForCurrentBizWeek(ctx context.Context) ([]FullCtxTask, error) {
 	week := GetCurrentBusinessWeekToDate()
 	return c.GetComplTasksForBizWeek(ctx, week)
 }
 
-func (c *Client) GetComplTasksForCurrentBizWeekByProject(ctx context.Context, p Project) ([]Task, BusinessWeek, error) {
+func (c *Client) GetComplTasksForCurrentBizWeekByProject(ctx context.Context, p Project) ([]FullCtxTask, BusinessWeek, error) {
 	week := GetCurrentBusinessWeekToDate()
 	t, err := c.GetComplTasks(ctx, TodoistAPIOpts{
 		Since:     week.Start,
@@ -87,7 +91,7 @@ func (c *Client) GetComplTasksForCurrentBizWeekByProject(ctx context.Context, p 
 }
 
 // GetTasksForCurrentFullBusinessWeek returns completed tasks for the entire current business week (Monday to Sunday)
-func (c *Client) GetComplTasksForCurrentFullBizWeek(ctx context.Context) ([]Task, error) {
+func (c *Client) GetComplTasksForCurrentFullBizWeek(ctx context.Context) ([]FullCtxTask, error) {
 	week := GetCurrentBusinessWeek()
 	return c.GetComplTasksForBizWeek(ctx, week)
 }
@@ -95,16 +99,16 @@ func (c *Client) GetComplTasksForCurrentFullBizWeek(ctx context.Context) ([]Task
 // GetTasksForPreviousBusinessWeeks returns completed tasks for N previous business weeks
 // Returns a slice of slices, where each inner slice contains tasks for one week
 // Weeks are in chronological order (oldest first)
-func (c *Client) GetComplTasksForPreviousBizWeeks(ctx context.Context, n int) (map[BusinessWeek][]Task, error) {
+func (c *Client) GetComplTasksForPreviousBizWeeks(ctx context.Context, n int) (map[int]BizWeekTasks, error) {
 	weeks := GetBusinessWeeksBack(n)
-	result := make(map[BusinessWeek][]Task, len(weeks))
+	result := make(map[int]BizWeekTasks, len(weeks))
 
-	for _, week := range weeks {
+	for i, week := range weeks {
 		tasks, err := c.GetComplTasksForBizWeek(ctx, week)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get tasks for week %s: %w", week.String(), err)
 		}
-		result[week] = tasks
+		result[i] = BizWeekTasks{Tasks: tasks, WeekOf: week}
 	}
 
 	return result, nil

@@ -16,6 +16,14 @@ type Project struct {
 	URL          string `json:"url"`
 }
 
+// This struct contains all the relevant invormation we need for a task -
+// the task info itself, it's parent task info, and other out-of-band info
+// that may not be in the API response for a given task.
+type FullCtxTask struct {
+	Task       Task
+	ParentTask Task
+}
+
 type Task struct {
 	ID             string                 `json:"id"`
 	UserID         string                 `json:"user_id"`
@@ -54,6 +62,7 @@ type Due struct {
 
 type TodoistAPIOpts struct {
 	ProjectID string    `json:"project_id,omitempty"`
+	TaskID    string    `json:"task_id,omitempty"`
 	Since     time.Time `json:"since,omitempty"`
 	Until     time.Time `json:"until,omitempty"`
 	Limit     int       `json:"limit,omitempty"`
