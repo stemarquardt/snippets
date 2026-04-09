@@ -36,11 +36,14 @@ type Usage struct {
 }
 
 type TaskSummary struct {
-	WeekOf          time.Time `json:"week_of"`
-	CompletedTasks  int       `json:"completed_tasks"`
-	Summary         string    `json:"summary"`
-	KeyCategories   []string  `json:"key_categories"`
-	ProductivityTrends string `json:"productivity_trends"`
+	PeriodStart        time.Time `json:"period_start"`
+	PeriodEnd          time.Time `json:"period_end"`
+	PeriodLabel        string    `json:"period_label"` // "weekly", "biweekly", "quarterly"
+	CompletedTasks     int       `json:"completed_tasks"`
+	Summary            string    `json:"summary"`
+	KeyCategories      []string  `json:"key_categories"`
+	Accomplishments    []string  `json:"accomplishments"`
+	ProductivityTrends string    `json:"productivity_trends"`
 }
 
 type TrendAnalysis struct {

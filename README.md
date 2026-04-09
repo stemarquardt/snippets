@@ -8,12 +8,13 @@ This is very much a WIP hobby project, but I like to keep a pulse on the themes 
 
 This is starting out using Todoist (because that's what I use) but I'm sure you could plug in some other service into `internal/clients/` and leverage it however you want.
 
-Next things up:
+**Status:** Work in progress hobby project.
 
-- [ ] Extract more info from tasks, especially sub tasks
-- [ ] Gen AI summary
-- [ ] Store rollups in SQLite db
-- [ ] Clean up the CLI tooling
+## Roadmap
+
+- Extract richer context from subtasks
+- Expand AI summary quality and prompt tuning
+- Trend analysis across time windows
 
 ## Project Structure
 
@@ -111,31 +112,27 @@ The CLI will prompt you securely if the environment variable is not set.
 ### Usage
 
 ```go
-import "snippets/internal/clients/todoist"
+import "github.com/stemarquardt/snippets/internal/clients/todoist"
 
-// Initialize client
-client := todoist.NewClient("your_api_token")
+// Initialize client (nil loads all projects; pass IDs to filter)
+client, err := todoist.NewClient(ctx, "your_api_token", nil)
 
 // Validate token
-err := client.ValidateToken()
+err = client.ValidateToken(ctx)
 
-// Get projects
-projects, err := client.GetProjects()
+// List all projects (sorted by name)
+projects := client.SortedProjects()
 
-// Get all tasks
-tasks, err := client.GetAllTasks()
+// Get all active tasks
+tasks, err := client.GetAllTasks(ctx)
 
-// Get tasks by project
-projectTasks, err := client.GetTasksByProject("project_id")
-
-// Get completed tasks in time window
-since := time.Now().AddDate(0, 0, -7) // 7 days ago
-until := time.Now()
-completed, err := client.GetCompletedTasksInTimeWindow(since, until)
+// Get completed tasks in a time window
+since := time.Now().AddDate(0, 0, -7)
+completed, err := client.GetComplTasksInTimeWindow(ctx, since, time.Now())
 
 // Helper methods for common time ranges
-todayCompleted, err := client.GetCompletedTasksToday()
-weekCompleted, err := client.GetCompletedTasksThisWeek()
+todayCompleted, err := client.GetComplTasksToday(ctx)
+weekCompleted, err := client.GetComplTasksForCurrentBizWeek(ctx)
 ```
 
 ### Features
@@ -160,16 +157,13 @@ This tool uses a "business week" concept where each week runs from **Monday to S
 
 ```go
 // Get tasks for current business week (Monday to today)
-tasks, err := client.GetCompletedTasksForCurrentBusinessWeek()
+tasks, err := client.GetComplTasksForCurrentBizWeek(ctx)
 
-// Get tasks for full business week (Monday to Sunday)
-fullWeek, err := client.GetCompletedTasksForCurrentFullBusinessWeek()
-
-// Get last 4 weeks of tasks for trend analysis
-weeklyTasks, err := client.GetCompletedTasksForPreviousBusinessWeeks(4)
+// Get last 4 business weeks of tasks
+weeklyTasks, err := client.GetComplTasksForPreviousBizWeeks(ctx, 4)
 
 // Get business week boundaries
 week := todoist.GetCurrentBusinessWeek()
-fmt.Printf("Week: %s\n", week.String()) // "Dec 2 - Dec 8, 2024"
+fmt.Printf("Week: %s\n", week.String()) // "Apr 7 - Apr 13, 2026"
 ```
 

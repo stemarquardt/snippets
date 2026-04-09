@@ -3,53 +3,111 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"time"
+	"slices"
 
 	"github.com/spf13/cobra"
 	"github.com/stemarquardt/snippets/internal/clients/claude"
+	todo "github.com/stemarquardt/snippets/internal/clients/todoist"
 )
 
 func runSummarizeTasks(cmd *cobra.Command, args []string) error {
-	tasksMap, err := todoClient.GetComplTasksForPreviousBizWeeks(cmd.Context(), bizWeeksFlag)
+	if !slices.Contains(validSummaryTypes, summaryType) {
+		return fmt.Errorf("provided summary type (%s) is not valid — options: %v", summaryType, validSummaryTypes)
+	}
+
+	switch summaryType {
+	case SummaryTypeWeekly:
+		return runWeeklySummaries(cmd)
+	case SummaryTypeBiweekly:
+		return runBiweeklySummaries(cmd)
+	case SummaryTypeQuarterly:
+		return runQuarterlySummary(cmd)
+	default:
+		return fmt.Errorf("summary type %q not yet implemented", summaryType)
+	}
+}
+
+func runWeeklySummaries(cmd *cobra.Command) error {
+	weeks := todo.GetBusinessWeeksBack(bizWeeksFlag)
+	for _, w := range weeks {
+		summary, err := loadOrGenSummary(cmd, SummaryTypeWeekly, w.Start.Format("2006-01-02"), func() (*claude.TaskSummary, error) {
+			tasks, err := todoClient.GetComplTasksForBizWeek(cmd.Context(), w)
+			if err != nil {
+				return nil, fmt.Errorf("error getting tasks for week %s: %w", w.Start, err)
+			}
+			return claudeClient.SummarizeTasks(tasks, w.Start, w.End, SummaryTypeWeekly)
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Println(FormatSummary(summary))
+	}
+	return nil
+}
+
+func runBiweeklySummaries(cmd *cobra.Command) error {
+	windows := todo.GetBiweeklyWindowsBack(bizWeeksFlag)
+	for _, w := range windows {
+		summary, err := loadOrGenSummary(cmd, SummaryTypeBiweekly, w.Start.Format("2006-01-02"), func() (*claude.TaskSummary, error) {
+			tasks, err := todoClient.GetComplTasksInTimeWindow(cmd.Context(), w.Start, w.End)
+			if err != nil {
+				return nil, fmt.Errorf("error getting tasks for biweekly window %s: %w", w.Start, err)
+			}
+			return claudeClient.SummarizeTasks(tasks, w.Start, w.End, SummaryTypeBiweekly)
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Println(FormatSummary(summary))
+	}
+	return nil
+}
+
+func runQuarterlySummary(cmd *cobra.Command) error {
+	w := todo.GetQuarterlyWindow()
+	key := todo.QuarterLabel(w.Start)
+
+	summary, err := loadOrGenSummary(cmd, SummaryTypeQuarterly, key, func() (*claude.TaskSummary, error) {
+		tasks, err := todoClient.GetComplTasksInTimeWindow(cmd.Context(), w.Start, w.End)
+		if err != nil {
+			return nil, fmt.Errorf("error getting tasks for quarter %s: %w", key, err)
+		}
+		return claudeClient.SummarizeTasks(tasks, w.Start, w.End, SummaryTypeQuarterly)
+	})
 	if err != nil {
 		return err
 	}
-	for i := 0; i < len(tasksMap); i++ {
-		tasks := tasksMap[i].Tasks
-		week := tasksMap[i].WeekOf
-		b, err := db.Read([]byte("weekly"), []byte(week.Start.Format("2006-01-02")))
-		if err != nil {
-			fmt.Printf("no entry found for week starting %s, generating summary - err: %s", week.Start, err)
-		}
-		var summary *claude.TaskSummary
-		err = json.Unmarshal(b, &summary)
-		if err != nil {
-			fmt.Println("error unmarshalling db entry, generating summary - err :", err)
-		}
-		if summary == nil {
-			fmt.Println("Generating summary...")
-			summary, err = claudeClient.SummarizeTasks(tasks, week.Start)
-			if err != nil {
-				return err
+	fmt.Println(FormatSummary(summary))
+	return nil
+}
+
+// loadOrGenSummary reads a summary from the DB if available; otherwise calls gen to produce it
+// and writes the result back to the DB. Pass --force-refresh to skip the cache read.
+func loadOrGenSummary(cmd *cobra.Command, bucket, key string, gen func() (*claude.TaskSummary, error)) (*claude.TaskSummary, error) {
+	if !forceRefresh {
+		b, err := db.Read([]byte(bucket), []byte(key))
+		if err == nil {
+			var s claude.TaskSummary
+			if jsonErr := json.Unmarshal(b, &s); jsonErr == nil {
+				fmt.Printf("Loaded %s summary for %q from cache.\n", bucket, key)
+				return &s, nil
 			}
-		} else {
-			fmt.Println("Loaded summary from storage...")
 		}
-		fmt.Println("Claude summary:")
-		fmt.Println("Week of", summary.WeekOf.Format(time.DateOnly))
-		fmt.Println("Number Tasks Completed:", summary.CompletedTasks)
-		fmt.Println("Key Categories", summary.KeyCategories)
-		fmt.Println("Summary:", summary.Summary)
-		fmt.Println("Productivity Trends:", summary.ProductivityTrends)
-
-		data, err := json.Marshal(summary)
-		if err != nil {
-			fmt.Println("Error writing summary to db:", err)
-			return err
-		}
-
-		db.Write([]byte("weekly"), []byte(summary.WeekOf.Format("2006-01-02")), data)
 	}
 
-	return nil
+	fmt.Printf("Generating %s summary for %q...\n", bucket, key)
+	s, err := gen()
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		fmt.Println("Warning: could not cache summary:", err)
+		return s, nil
+	}
+	if err := db.Write([]byte(bucket), []byte(key), data); err != nil {
+		fmt.Println("Warning: could not write summary to db:", err)
+	}
+	return s, nil
 }

@@ -1,6 +1,9 @@
 package todoist
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // BusinessWeek represents a week from Monday to Sunday
 type BusinessWeek struct {
@@ -78,6 +81,52 @@ func GetBusinessWeeksBack(n int) []BusinessWeek {
 	}
 
 	return weeks
+}
+
+// GetBiweeklyWindowsBack returns N non-overlapping 2-week windows going back from the current week.
+// The most recent window covers the previous full business week + current business week.
+// Windows are returned in chronological order (oldest first).
+func GetBiweeklyWindowsBack(n int) []BusinessWeek {
+	windows := make([]BusinessWeek, n)
+	now := time.Now()
+	for i := n - 1; i >= 0; i-- {
+		endWeekDate := now.AddDate(0, 0, -14*i)
+		endWeek := GetBusinessWeekForDate(endWeekDate)
+		startWeek := GetBusinessWeekForDate(endWeekDate.AddDate(0, 0, -7))
+		end := endWeek.End
+		if i == 0 && now.Before(end) {
+			end = now
+		}
+		windows[n-1-i] = BusinessWeek{Start: startWeek.Start, End: end}
+	}
+	return windows
+}
+
+// GetQuarterlyWindow returns the current calendar quarter as a BusinessWeek window.
+// The end is capped at the current time if the quarter is still in progress.
+func GetQuarterlyWindow() BusinessWeek {
+	now := time.Now()
+	q := (int(now.Month()) - 1) / 3
+	startMonth := time.Month(q*3 + 1)
+	start := time.Date(now.Year(), startMonth, 1, 0, 0, 0, 0, now.Location())
+
+	endMonth := startMonth + 3
+	var end time.Time
+	if endMonth > 12 {
+		end = time.Date(now.Year()+1, endMonth-12, 1, 0, 0, 0, 0, now.Location()).Add(-time.Second)
+	} else {
+		end = time.Date(now.Year(), endMonth, 1, 0, 0, 0, 0, now.Location()).Add(-time.Second)
+	}
+	if now.Before(end) {
+		end = now
+	}
+	return BusinessWeek{Start: start, End: end}
+}
+
+// QuarterLabel returns a string like "2026:Q2" for the quarter containing t.
+func QuarterLabel(t time.Time) string {
+	q := (int(t.Month())-1)/3 + 1
+	return fmt.Sprintf("%d:Q%d", t.Year(), q)
 }
 
 // IsInBusinessWeek checks if a given time falls within the business week

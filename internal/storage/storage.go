@@ -6,6 +6,14 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+// db schema is:
+// |   bucket    |        key         |      value         |
+//  =======================================================
+// | "weekly"    | start of biz week  | list of summaries  |
+// | "monthly"   | YEAR:3_LETTE_MONTH | list of summaries  |
+// | "quarterly" | YEAR:Q_NUM         | list of summaries  |
+// | "standup"   | start of biz week  | summary, todo items|
+
 type Store struct {
 	db   *bolt.DB
 	path string

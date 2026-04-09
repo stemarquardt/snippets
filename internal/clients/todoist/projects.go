@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 )
 
 func (c *Client) SetProjects(projs []Project) {
@@ -33,17 +35,13 @@ func (c *Client) GetProject(ctx context.Context, projectId string) (*Project, er
 	return c.getProjectFromAPI(ctx, projectId)
 }
 
-func (c *Client) GetProjects(ctx context.Context) ([]Project, error) {
-	if c.Projects != nil {
-		// This means the project flags were set, so we're filtering for these Projects only.
-		p := make([]Project, 0, len(c.Projects))
-		for k := range c.Projects {
-			p = append(p, *c.Projects[k])
-		}
-		return p, nil
+// GetProjects returns the projects currently loaded in the client.
+func (c *Client) GetProjects() []Project {
+	p := make([]Project, 0, len(c.Projects))
+	for _, proj := range c.Projects {
+		p = append(p, *proj)
 	}
-	// Desired projects not set, or requesting every project for this user.
-	return c.getAllProjectsFromAPI(ctx)
+	return p
 }
 
 func (c *Client) getAllProjectsFromAPI(ctx context.Context) ([]Project, error) {
@@ -59,6 +57,72 @@ func (c *Client) getAllProjectsFromAPI(ctx context.Context) ([]Project, error) {
 		return nil, err
 	}
 	return d.Results, nil
+}
+
+// ResolveProjectRefs resolves a slice of project names or IDs to Project values.
+// Each ref is matched in order: exact ID → exact name (case-insensitive) → substring name.
+// Returns an error if a ref matches no projects or is ambiguous.
+// c.Projects must already be populated (e.g. via NewClient with no ID filter).
+func (c *Client) ResolveProjectRefs(refs []string) ([]Project, error) {
+	var resolved []Project
+	for _, ref := range refs {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
+		}
+		p, err := c.resolveRef(ref)
+		if err != nil {
+			return nil, err
+		}
+		resolved = append(resolved, p)
+	}
+	return resolved, nil
+}
+
+func (c *Client) resolveRef(ref string) (Project, error) {
+	// Exact ID match.
+	if p, ok := c.Projects[ref]; ok {
+		return *p, nil
+	}
+
+	// Exact name match (case-insensitive).
+	refLower := strings.ToLower(ref)
+	for _, p := range c.Projects {
+		if strings.ToLower(p.Name) == refLower {
+			return *p, nil
+		}
+	}
+
+	// Fuzzy: substring match on name.
+	var matches []Project
+	for _, p := range c.Projects {
+		if strings.Contains(strings.ToLower(p.Name), refLower) {
+			matches = append(matches, *p)
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		return Project{}, fmt.Errorf("no project found matching %q", ref)
+	default:
+		sort.Slice(matches, func(i, j int) bool { return matches[i].Name < matches[j].Name })
+		labels := make([]string, len(matches))
+		for i, m := range matches {
+			labels[i] = fmt.Sprintf("%q (ID: %s)", m.Name, m.ID)
+		}
+		return Project{}, fmt.Errorf("ambiguous project ref %q — matches: %s", ref, strings.Join(labels, ", "))
+	}
+}
+
+// SortedProjects returns all loaded projects sorted alphabetically by name.
+func (c *Client) SortedProjects() []Project {
+	projs := make([]Project, 0, len(c.Projects))
+	for _, p := range c.Projects {
+		projs = append(projs, *p)
+	}
+	sort.Slice(projs, func(i, j int) bool { return projs[i].Name < projs[j].Name })
+	return projs
 }
 
 func (c *Client) getProjectFromAPI(ctx context.Context, projectID string) (*Project, error) {

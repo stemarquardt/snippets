@@ -11,15 +11,17 @@ import (
 
 func runAllTodoTasks(cmd *cobra.Command, args []string) error {
 	var tasks []todo.FullCtxTask
-	var err error
 	for _, p := range todoClient.Projects {
-		tasks, err = todoClient.GetTasksForProj(cmd.Context(), p.ID)
+		t, err := todoClient.GetTasksForProj(cmd.Context(), p.ID)
 		if err != nil {
 			return err
 		}
+		tasks = append(tasks, t...)
 	}
-	fmt.Println("All tasks:")
-	data, _ := json.MarshalIndent(tasks, "", "  ")
+	data, err := json.MarshalIndent(tasks, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal tasks: %w", err)
+	}
 	fmt.Println(string(data))
 	return nil
 }

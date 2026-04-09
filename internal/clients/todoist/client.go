@@ -61,7 +61,6 @@ func (e APIError) Error() string {
 }
 
 func (c *Client) GetProductivityStats(ctx context.Context, opts TodoistAPIOpts) (ProductivityStats, error) {
-	// Not sure what to do with this info, but could be fun!
 	resp, err := c.doGetRequest(ctx, "/tasks/completed/stats", TodoistAPIOpts{})
 	if err != nil {
 		return ProductivityStats{}, fmt.Errorf("problem getting productivity stats: %s", err.Error())
@@ -122,64 +121,6 @@ func (c *Client) doGetRequest(ctx context.Context, endpoint string, opts Todoist
 	return resp, nil
 }
 
-// func (c *Client) doRequest(method, endpoint string, opts TodoistAPIOpts) (*http.Response, error) {
-// 	if method == "GET" {
-// 		return c.doGetRequest(endpoint, opts)
-// 	}
-
-// 	req, err := http.NewRequest(method, c.baseURL+endpoint, reqBody)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to create request: %w", err)
-// 	}
-
-// 	req.Header.Set("Authorization", "Bearer "+c.token)
-// 	if body != nil {
-// 		req.Header.Set("Content-Type", "application/json")
-// 	}
-
-// 	resp, err := c.httpClient.Do(req)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to execute request: %w", err)
-// 	}
-
-// 	if resp.StatusCode >= 400 {
-// 		defer resp.Body.Close()
-// 		bodyBytes, _ := io.ReadAll(resp.Body)
-// 		return nil, APIError{
-// 			StatusCode: resp.StatusCode,
-// 			Message:    string(bodyBytes),
-// 		}
-// 	}
-
-// 	return resp, nil
-// }
-
-// func (c *Client) doFormRequest(endpoint string, formData url.Values) (*http.Response, error) {
-// 	req, err := http.NewRequest(http.MethodGet, c.baseURL+endpoint, strings.NewReader(formData.Encode()))
-// 	if err != nil {
-// 		return nil, fmt.Errorf("Failed to create request: %w", err)
-// 	}
-
-// 	req.Header.Set("Authorization", "Bearer "+c.token)
-// 	req.Header.Set("Content-Type", "application/json")
-
-// 	fmt.Printf("Req: %+v", req)
-// 	resp, err := c.httpClient.Do(req)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("Failed to execute request: %w", err)
-// 	}
-
-// 	if resp.StatusCode >= 400 {
-// 		defer resp.Body.Close()
-// 		bodyBytes, _ := io.ReadAll(resp.Body)
-// 		return nil, APIError{
-// 			StatusCode: resp.StatusCode,
-// 			Message:    string(bodyBytes),
-// 		}
-// 	}
-
-// 	return resp, nil
-// }
 
 func (c *Client) ValidateToken(ctx context.Context) error {
 	// Use arbitrary, hopefully fast, endpoint to test out the token

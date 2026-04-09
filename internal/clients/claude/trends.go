@@ -38,7 +38,7 @@ Focus on:
 - Areas of growing or declining focus
 - Actionable insights for improvement`
 
-	currentWeekSummary := fmt.Sprintf("CURRENT WEEK (%s): %d tasks completed",
+	currentWeekSummary := fmt.Sprintf("CURRENT PERIOD (%s): %d tasks completed",
 		time.Now().Format("Jan 2"), len(currentWeekTasks))
 
 	if len(currentWeekTasks) > 0 {
@@ -55,8 +55,8 @@ Focus on:
 		if len(summary.KeyCategories) > 0 {
 			categories = strings.Join(summary.KeyCategories, ", ")
 		}
-		historicalData[i] = fmt.Sprintf("Week of %s: %d tasks, Categories: %s\nSummary: %s",
-			summary.WeekOf.Format("Jan 2"),
+		historicalData[i] = fmt.Sprintf("Period starting %s: %d tasks, Categories: %s\nSummary: %s",
+			summary.PeriodStart.Format("Jan 2"),
 			summary.CompletedTasks,
 			categories,
 			summary.Summary)
